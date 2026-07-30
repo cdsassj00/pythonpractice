@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>업무 자동화 도구모음</title>
+<style>
+  :root{
+    --navy:#12335c; --navy2:#1c4b85; --accent:#e8542f; --gold:#c99a3b;
+    --bg:#f4f6f9; --card:#ffffff; --line:#e2e7ee; --text:#1f2937; --muted:#6b7280;
+    --ok:#1e874b; --okbg:#e8f6ee;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Malgun Gothic","맑은 고딕",-apple-system,sans-serif;
+    background:var(--bg);color:var(--text);line-height:1.6}
+  header{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;
+    padding:22px 20px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+  header h1{margin:0;font-size:20px;font-weight:800;letter-spacing:-.5px}
+  header p{margin:4px 0 0;font-size:13px;opacity:.85}
+  .wrap{max-width:1100px;margin:0 auto;padding:20px}
+  .tabs{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0}
+  .tab{padding:9px 14px;border:1px solid var(--line);background:#fff;border-radius:20px;
+    cursor:pointer;font-size:14px;font-weight:600;color:var(--muted);transition:.15s}
+  .tab.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .panel{display:none}
+  .panel.active{display:block}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  .card h2{margin:0 0 4px;font-size:16px;color:var(--navy)}
+  .card .desc{font-size:13px;color:var(--muted);margin:0 0 14px}
+  label{display:block;font-size:13px;font-weight:600;margin:10px 0 4px}
+  input[type=text],input[type=date],input[type=number],textarea,select{
+    width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;
+    font-size:14px;font-family:inherit}
+  textarea{min-height:110px;resize:vertical}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .row>div{flex:1;min-width:140px}
+  button{cursor:pointer;border:none;border-radius:8px;font-size:14px;font-weight:700;
+    padding:10px 16px;font-family:inherit;transition:.15s}
+  .btn{background:var(--accent);color:#fff}
+  .btn:hover{filter:brightness(1.05)}
+  .btn2{background:#eef2f7;color:var(--navy)}
+  .btn-sm{padding:6px 10px;font-size:12px}
+  .result{margin-top:14px;padding:14px;background:#f8fafc;border:1px solid var(--line);
+    border-radius:8px;font-size:15px;min-height:20px;white-space:pre-wrap;word-break:break-all}
+  .big{font-size:22px;font-weight:800;color:var(--navy)}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  .snip,.linkitem,.todoitem{display:flex;align-items:center;gap:10px;padding:10px;
+    border:1px solid var(--line);border-radius:8px;margin-bottom:8px;background:#fff}
+  .snip .txt{flex:1;font-size:14px}
+  .todoitem input[type=checkbox]{width:18px;height:18px}
+  .todoitem.done .txt{text-decoration:line-through;color:var(--muted)}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+    background:var(--ok);color:#fff;padding:10px 20px;border-radius:24px;font-size:14px;
+    font-weight:700;opacity:0;transition:.3s;pointer-events:none;z-index:99}
+  .toast.show{opacity:1}
+  a.link{color:var(--navy2);font-weight:600;text-decoration:none;flex:1}
+  a.link:hover{text-decoration:underline}
+  .footer{text-align:center;color:var(--muted);font-size:12px;padding:24px}
+  .pill{display:inline-block;background:var(--okbg);color:var(--ok);font-size:12px;
+    font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap" style="padding-top:0;padding-bottom:0">
+    <h1>🗂️ 업무 자동화 도구모음</h1>
+    <p>기후에너지환경부 실무 도우미 · 설치 불필요 · 입력내용은 이 컴퓨터에만 저장됩니다</p>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="tabs">
+    <div class="tab active" data-p="date">📅 기한계산</div>
+    <div class="tab" data-p="mask">🔒 개인정보 가리기</div>
+    <div class="tab" data-p="text">🧹 텍스트 정리</div>
+    <div class="tab" data-p="snip">📝 자주쓰는 문구</div>
+    <div class="tab" data-p="todo">✅ 오늘 할 일</div>
+    <div class="tab" data-p="link">🔗 즐겨찾기</div>
+  </div>
+
+  <!-- 기한계산 -->
+  <div class="panel active" id="date">
+    <div class="card">
+      <h2>기한 계산기</h2>
+      <p class="desc">공문 처리기한, 회신 마감일 등을 계산합니다. 시작일에서 며칠 뒤인지 자동으로 알려줘요.</p>
+      <div class="row">
+        <div><label>시작일</label><input type="date" id="d_start"></div>
+        <div><label>더할 일수 (예: 7)</label><input type="number" id="d_days" value="7"></div>
+        <div><label>계산 방식</label>
+          <select id="d_mode">
+            <option value="cal">달력일 기준 (주말 포함)</option>
+            <option value="biz">근무일 기준 (주말 제외)</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:14px"><button class="btn" onclick="calcDate()">계산하기</button></div>
+      <div class="result big" id="d_out">시작일과 일수를 입력하세요.</div>
+    </div>
+    <div class="card">
+      <h2>두 날짜 사이 일수</h2>
+      <p class="desc">사업기간, 경과일 등을 셀 때 사용하세요.</p>
+      <div class="row">
+        <div><label>시작일</label><input type="date" id="g_start"></div>
+        <div><label>종료일</label><input type="date" id="g_end"></div>
+      </div>
+      <div style="margin-top:14px"><button class="btn" onclick="calcGap()">계산하기</button></div>
+      <div class="result big" id="g_out">두 날짜를 입력하세요.</div>
+    </div>
+  </div>
+
+  <!-- 마스킹 -->
+  <div class="panel" id="mask">
+    <div class="card">
+      <h2>개인정보 자동 가리기</h2>
+      <p class="desc">붙여넣은 글에서 주민등록번호·전화번호·이메일·계좌번호를 자동으로 ●●●● 처리합니다.
+        문서 공유 전 개인정보 노출을 막아줘요.</p>
+      <label>원본 텍스트</label>
+      <textarea id="m_in" placeholder="여기에 내용을 붙여넣으세요.&#10;예) 홍길동 010-1234-5678 hong@korea.kr 900101-1234567"></textarea>
+      <div style="margin-top:12px">
+        <button class="btn" onclick="doMask()">가리기 실행</button>
+        <button class="btn2" onclick="copyEl('m_out')">결과 복사</button>
+      </div>
+      <label style="margin-top:14px">결과</label>
+      <div class="result" id="m_out"></div>
+    </div>
+  </div>
+
+  <!-- 텍스트정리 -->
+  <div class="panel" id="text">
+    <div class="card">
+      <h2>텍스트 정리</h2>
+      <p class="desc">웹·PDF·한글에서 복사하면 생기는 불필요한 줄바꿈과 공백을 깔끔하게 정리합니다.</p>
+      <label>원본 텍스트</label>
+      <textarea id="t_in" placeholder="지저분한 텍스트를 붙여넣으세요."></textarea>
+      <div style="margin-top:12px">
+        <button class="btn" onclick="cleanText('trim')">공백·빈줄 정리</button>
+        <button class="btn2" onclick="cleanText('oneline')">한 줄로 합치기</button>
+        <button class="btn2" onclick="cleanText('nospace')">모든 공백 제거</button>
+        <button class="btn2" onclick="copyEl('t_out')">결과 복사</button>
+      </div>
+      <label style="margin-top:14px">결과 <span class="pill" id="t_count"></span></label>
+      <div class="result" id="t_out"></div>
+    </div>
+  </div>
+
+  <!-- 스니펫 -->
+  <div class="panel" id="snip">
+    <div class="card">
+      <h2>자주 쓰는 문구</h2>
+      <p class="desc">인사말, 공문 상투구, 서명 등 반복 입력하는 문구를 저장해두고 한 번에 복사하세요.</p>
+      <label>새 문구 추가</label>
+      <textarea id="s_new" placeholder="예) 안녕하십니까. 기후에너지환경부 ○○과 ○○○입니다.&#10;귀 기관의 무궁한 발전을 기원합니다."></textarea>
+      <div style="margin-top:10px"><button class="btn" onclick="addSnip()">추가하기</button></div>
+      <div id="s_list" style="margin-top:16px"></div>
+    </div>
+  </div>
+
+  <!-- 할일 -->
+  <div class="panel" id="todo">
+    <div class="card">
+      <h2>오늘 할 일</h2>
+      <p class="desc">체크한 내용은 자동 저장됩니다. 완료한 일은 아래로 정리돼요.</p>
+      <div class="row">
+        <div style="flex:3"><input type="text" id="todo_new" placeholder="할 일을 입력하고 Enter"></div>
+        <div style="flex:0"><button class="btn" onclick="addTodo()">추가</button></div>
+      </div>
+      <div id="todo_list" style="margin-top:16px"></div>
+    </div>
+  </div>
+
+  <!-- 링크 -->
+  <div class="panel" id="link">
+    <div class="card">
+      <h2>업무 즐겨찾기</h2>
+      <p class="desc">자주 가는 사이트를 저장하세요. 아래 기본 링크는 자유롭게 삭제할 수 있습니다.</p>
+      <div class="row">
+        <div style="flex:2"><input type="text" id="l_name" placeholder="이름 (예: 나라장터)"></div>
+        <div style="flex:3"><input type="text" id="l_url" placeholder="주소 (예: www.g2b.go.kr)"></div>
+        <div style="flex:0"><button class="btn" onclick="addLink()">추가</button></div>
+      </div>
+      <div id="l_list" style="margin-top:16px"></div>
+    </div>
+  </div>
+
+  <div class="footer">모든 데이터는 브라우저(이 PC)에만 저장되며 외부로 전송되지 않습니다.</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- 공통 ---------- */
+const $=id=>document.getElementById(id);
+function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),1500);}
+function copyText(txt){navigator.clipboard.writeText(txt).then(()=>toast('복사되었습니다'));}
+function copyEl(id){const v=$(id).textContent;if(!v.trim()){toast('복사할 내용이 없습니다');return;}copyText(v);}
+function store(k,v){localStorage.setItem('wa_'+k,JSON.stringify(v));}
+function load(k,def){try{return JSON.parse(localStorage.getItem('wa_'+k))??def;}catch(e){return def;}}
+
+/* 탭 전환 */
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');$(t.dataset.p).classList.add('active');
+});
+
+/* ---------- 기한계산 ---------- */
+const WD=['일','월','화','수','목','금','토'];
+function fmt(d){return `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${WD[d.getDay()]})`;}
+function todayStr(){const d=new Date();return d.toISOString().slice(0,10);}
+$('d_start').value=todayStr();$('g_start').value=todayStr();
+function calcDate(){
+  const s=$('d_start').value; let n=parseInt($('d_days').value);
+  if(!s||isNaN(n)){$('d_out').textContent='시작일과 일수를 입력하세요.';return;}
+  let d=new Date(s);
+  if($('d_mode').value==='biz'){
+    let added=0;while(added<n){d.setDate(d.getDate()+1);const w=d.getDay();if(w!==0&&w!==6)added++;}
+  }else{d.setDate(d.getDate()+n);}
+  $('d_out').textContent='➡ '+fmt(d);
+}
+function calcGap(){
+  const a=$('g_start').value,b=$('g_end').value;
+  if(!a||!b){$('g_out').textContent='두 날짜를 입력하세요.';return;}
+  const diff=Math.round((new Date(b)-new Date(a))/86400000);
+  $('g_out').textContent=`➡ ${Math.abs(diff)}일 (양끝 포함 ${Math.abs(diff)+1}일)`;
+}
+
+/* ---------- 마스킹 ---------- */
+function doMask(){
+  let t=$('m_in').value;
+  t=t.replace(/(\d{6})[-\s]?\d{7}/g,'$1-●●●●●●●');           // 주민번호
+  t=t.replace(/(01[016789])[-\s]?\d{3,4}[-\s]?(\d{2})\d{2}/g,'$1-****-**$2'); // 휴대폰
+  t=t.replace(/(\d{2,3})[-\s]?(\d{3,4})[-\s]?\d{4}/g,m=>m.replace(/\d{4}(?=\D*$)/,'****')); // 일반전화
+  t=t.replace(/([\w.+-]{1,3})[\w.+-]*(@[\w.-]+)/g,'$1***$2');  // 이메일
+  t=t.replace(/\b\d{3,6}[-\s]\d{2,6}[-\s]\d{2,8}\b/g,'●●●-●●-●●●●●●'); // 계좌
+  $('m_out').textContent=t||'(내용 없음)';
+  toast('개인정보를 가렸습니다');
+}
+
+/* ---------- 텍스트 정리 ---------- */
+function cleanText(mode){
+  let t=$('t_in').value;
+  if(mode==='trim'){
+    t=t.split('\n').map(l=>l.replace(/[ \t]+/g,' ').trim()).filter((l,i,a)=>!(l===''&&a[i-1]===''))
+      .join('\n').replace(/\n{3,}/g,'\n\n').trim();
+  }else if(mode==='oneline'){
+    t=t.replace(/\s*\n\s*/g,' ').replace(/[ \t]+/g,' ').trim();
+  }else if(mode==='nospace'){
+    t=t.replace(/\s+/g,'');
+  }
+  $('t_out').textContent=t;
+  const chars=t.length,noSpace=t.replace(/\s/g,'').length;
+  $('t_count').textContent=`${chars}자 (공백제외 ${noSpace}자)`;
+}
+
+/* ---------- 스니펫 ---------- */
+function renderSnip(){
+  const list=load('snip',[]);const box=$('s_list');box.innerHTML='';
+  if(!list.length){box.innerHTML='<p class="hint">저장된 문구가 없습니다.</p>';return;}
+  list.forEach((s,i)=>{
+    const d=document.createElement('div');d.className='snip';
+    d.innerHTML=`<div class="txt">${s.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>`;
+    const c=document.createElement('button');c.className='btn btn-sm';c.textContent='복사';
+    c.onclick=()=>copyText(s);
+    const x=document.createElement('button');x.className='btn2 btn-sm';x.textContent='삭제';
+    x.onclick=()=>{list.splice(i,1);store('snip',list);renderSnip();};
+    d.appendChild(c);d.appendChild(x);box.appendChild(d);
+  });
+}
+function addSnip(){
+  const v=$('s_new').value.trim();if(!v){toast('문구를 입력하세요');return;}
+  const list=load('snip',[]);list.unshift(v);store('snip',list);$('s_new').value='';renderSnip();toast('추가되었습니다');
+}
+
+/* ---------- 할일 ---------- */
+function renderTodo(){
+  const list=load('todo',[]);const box=$('todo_list');box.innerHTML='';
+  if(!list.length){box.innerHTML='<p class="hint">할 일이 없습니다.</p>';return;}
+  list.sort((a,b)=>a.done-b.done);
+  list.forEach((t,i)=>{
+    const d=document.createElement('div');d.className='todoitem'+(t.done?' done':'');
+    const cb=document.createElement('input');cb.type='checkbox';cb.checked=t.done;
+    cb.onchange=()=>{t.done=cb.checked;store('todo',list);renderTodo();};
+    const sp=document.createElement('div');sp.className='txt';sp.textContent=t.text;
+    const x=document.createElement('button');x.className='btn2 btn-sm';x.textContent='삭제';
+    x.onclick=()=>{list.splice(list.indexOf(t),1);store('todo',list);renderTodo();};
+    d.appendChild(cb);d.appendChild(sp);d.appendChild(x);box.appendChild(d);
+  });
+}
+function addTodo(){
+  const v=$('todo_new').value.trim();if(!v)return;
+  const list=load('todo',[]);list.push({text:v,done:false});store('todo',list);$('todo_new').value='';renderTodo();
+}
+$('todo_new').addEventListener('keydown',e=>{if(e.key==='Enter')addTodo();});
+
+/* ---------- 링크 ---------- */
+const DEFAULT_LINKS=[
+  {name:'정부24',url:'https://www.gov.kr'},
+  {name:'나라장터',url:'https://www.g2b.go.kr'},
+  {name:'온나라(정부업무관리)',url:'https://www.on-nara.go.kr'},
+  {name:'국가법령정보센터',url:'https://www.law.go.kr'},
+  {name:'e사람(인사)',url:'https://www.esaram.go.kr'},
+];
+function normUrl(u){return /^https?:\/\//.test(u)?u:'https://'+u;}
+function renderLink(){
+  let list=load('link',null);if(list===null){list=DEFAULT_LINKS.slice();store('link',list);}
+  const box=$('l_list');box.innerHTML='';
+  if(!list.length){box.innerHTML='<p class="hint">저장된 링크가 없습니다.</p>';return;}
+  list.forEach((l,i)=>{
+    const d=document.createElement('div');d.className='linkitem';
+    const a=document.createElement('a');a.className='link';a.href=normUrl(l.url);a.target='_blank';
+    a.textContent='🔗 '+l.name;
+    const x=document.createElement('button');x.className='btn2 btn-sm';x.textContent='삭제';
+    x.onclick=()=>{list.splice(i,1);store('link',list);renderLink();};
+    d.appendChild(a);d.appendChild(x);box.appendChild(d);
+  });
+}
+function addLink(){
+  const n=$('l_name').value.trim(),u=$('l_url').value.trim();
+  if(!n||!u){toast('이름과 주소를 입력하세요');return;}
+  const list=load('link',DEFAULT_LINKS.slice());list.push({name:n,url:u});store('link',list);
+  $('l_name').value='';$('l_url').value='';renderLink();toast('추가되었습니다');
+}
+
+/* 초기 렌더 */
+renderSnip();renderTodo();renderLink();
+</script>
+</body>
+</html>
