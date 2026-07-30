@@ -160,11 +160,18 @@
   <div class="panel" id="todo">
     <div class="card">
       <h2>오늘 할 일</h2>
-      <p class="desc">체크한 내용은 자동 저장됩니다. 완료한 일은 아래로 정리돼요.</p>
+      <p class="desc">할 일을 <b>내 컴퓨터에 파일(.json)</b>로 저장하고 다시 불러올 수 있습니다.
+        아래 버튼으로 파일을 저장해두면 다른 PC에서도 불러와서 이어서 쓸 수 있어요.</p>
       <div class="row">
         <div style="flex:3"><input type="text" id="todo_new" placeholder="할 일을 입력하고 Enter"></div>
         <div style="flex:0"><button class="btn" onclick="addTodo()">추가</button></div>
       </div>
+      <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" onclick="saveTodoFile()">💾 내 컴퓨터에 저장</button>
+        <button class="btn2" onclick="openTodoFile()">📂 파일 불러오기</button>
+        <input type="file" id="todo_file" accept=".json,application/json" style="display:none">
+      </div>
+      <div class="hint" id="todo_status">아직 저장 파일이 연결되지 않았습니다.</div>
       <div id="todo_list" style="margin-top:16px"></div>
     </div>
   </div>
@@ -273,26 +280,89 @@ function addSnip(){
   const list=load('snip',[]);list.unshift(v);store('snip',list);$('s_new').value='';renderSnip();toast('추가되었습니다');
 }
 
-/* ---------- 할일 ---------- */
+/* ---------- 할일 (내 컴퓨터에 파일로 저장) ---------- */
+let todoData=load('todo',[]);   // 작업 중 임시 보관(브라우저 캐시 겸용)
+let todoHandle=null;            // 연결된 파일 핸들(크롬/엣지)
+let todoDirty=false;            // 마지막 저장 이후 변경 여부
+const canFS=('showSaveFilePicker' in window);
+
+function todoStatus(msg){$('todo_status').textContent=msg;}
+function markDirty(){todoDirty=true;store('todo',todoData);
+  if(todoHandle){todoStatus('● 저장 안 된 변경사항이 있습니다 — [내 컴퓨터에 저장]을 누르세요.');}}
+
 function renderTodo(){
-  const list=load('todo',[]);const box=$('todo_list');box.innerHTML='';
+  const list=todoData;const box=$('todo_list');box.innerHTML='';
   if(!list.length){box.innerHTML='<p class="hint">할 일이 없습니다.</p>';return;}
   list.sort((a,b)=>a.done-b.done);
-  list.forEach((t,i)=>{
+  list.forEach((t)=>{
     const d=document.createElement('div');d.className='todoitem'+(t.done?' done':'');
     const cb=document.createElement('input');cb.type='checkbox';cb.checked=t.done;
-    cb.onchange=()=>{t.done=cb.checked;store('todo',list);renderTodo();};
+    cb.onchange=()=>{t.done=cb.checked;markDirty();renderTodo();};
     const sp=document.createElement('div');sp.className='txt';sp.textContent=t.text;
     const x=document.createElement('button');x.className='btn2 btn-sm';x.textContent='삭제';
-    x.onclick=()=>{list.splice(list.indexOf(t),1);store('todo',list);renderTodo();};
+    x.onclick=()=>{list.splice(list.indexOf(t),1);markDirty();renderTodo();};
     d.appendChild(cb);d.appendChild(sp);d.appendChild(x);box.appendChild(d);
   });
 }
 function addTodo(){
   const v=$('todo_new').value.trim();if(!v)return;
-  const list=load('todo',[]);list.push({text:v,done:false});store('todo',list);$('todo_new').value='';renderTodo();
+  todoData.push({text:v,done:false});markDirty();$('todo_new').value='';renderTodo();
 }
 $('todo_new').addEventListener('keydown',e=>{if(e.key==='Enter')addTodo();});
+
+/* 파일로 저장 */
+async function saveTodoFile(){
+  const json=JSON.stringify(todoData,null,2);
+  const name='오늘할일.json';
+  try{
+    if(canFS){
+      if(!todoHandle){
+        todoHandle=await window.showSaveFilePicker({suggestedName:name,
+          types:[{description:'할 일 파일',accept:{'application/json':['.json']}}]});
+      }
+      const w=await todoHandle.createWritable();await w.write(json);await w.close();
+      todoDirty=false;todoStatus('✔ 저장 완료: '+todoHandle.name+' (앞으로 [저장]을 누르면 같은 파일에 덮어씁니다)');
+      toast('내 컴퓨터에 저장했습니다');
+    }else{
+      downloadFile(name,json);
+      todoStatus('✔ '+name+' 파일을 다운로드했습니다. (다운로드 폴더 확인)');
+      toast('파일을 다운로드했습니다');
+    }
+  }catch(e){if(e.name!=='AbortError')toast('저장이 취소되었습니다');}
+}
+
+/* 파일 불러오기 */
+async function openTodoFile(){
+  try{
+    if(canFS){
+      const [h]=await window.showOpenFilePicker({
+        types:[{description:'할 일 파일',accept:{'application/json':['.json']}}]});
+      todoHandle=h;const f=await h.getFile();loadTodoText(await f.text());
+      todoStatus('✔ 불러옴: '+h.name+' (이제 [저장]하면 이 파일에 덮어씁니다)');
+    }else{
+      $('todo_file').click();
+    }
+  }catch(e){if(e.name!=='AbortError')toast('불러오기가 취소되었습니다');}
+}
+$('todo_file').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=()=>{loadTodoText(r.result);
+    todoStatus('✔ 불러옴: '+f.name);};r.readAsText(f);e.target.value='';
+});
+function loadTodoText(txt){
+  try{const arr=JSON.parse(txt);
+    if(!Array.isArray(arr))throw 0;
+    todoData=arr.map(t=>({text:String(t.text||''),done:!!t.done})).filter(t=>t.text);
+    store('todo',todoData);todoDirty=false;renderTodo();toast('할 일을 불러왔습니다');
+  }catch(e){toast('올바른 할 일 파일이 아닙니다');}
+}
+function downloadFile(name,text){
+  const blob=new Blob([text],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;
+  a.click();URL.revokeObjectURL(a.href);
+}
+/* 저장 안 하고 창 닫으면 경고 */
+window.addEventListener('beforeunload',e=>{if(todoDirty&&todoData.length){e.preventDefault();e.returnValue='';}});
 
 /* ---------- 링크 ---------- */
 const DEFAULT_LINKS=[
