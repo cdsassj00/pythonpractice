@@ -24,9 +24,9 @@ GROUND = 1400.0         # forest / terrain extent around the site
 # --- materials (base_color RGBA, metallic, roughness) -----------------------
 
 MATERIALS = {
-    "forest":      ((0.043, 0.086, 0.043, 1.0), 0.0, 0.95),
-    "grass":       ((0.180, 0.290, 0.130, 1.0), 0.0, 0.90),
-    "lawn":        ((0.220, 0.380, 0.160, 1.0), 0.0, 0.85),
+    "forest":      ((0.018, 0.042, 0.022, 1.0), 0.0, 0.96),
+    "grass":       ((0.115, 0.205, 0.088, 1.0), 0.0, 0.92),
+    "lawn":        ((0.150, 0.285, 0.115, 1.0), 0.0, 0.88),
     "pad":         ((0.700, 0.710, 0.720, 1.0), 0.0, 0.80),
     "asphalt":     ((0.140, 0.150, 0.165, 1.0), 0.0, 0.70),
     "paint":       ((0.900, 0.910, 0.920, 1.0), 0.0, 0.55),
@@ -39,10 +39,34 @@ MATERIALS = {
     "metal":       ((0.720, 0.745, 0.780, 1.0), 0.85, 0.30),
     "tank":        ((0.470, 0.560, 0.680, 1.0), 0.35, 0.35),
     "silo":        ((0.860, 0.875, 0.890, 1.0), 0.30, 0.35),
+    "neighbor":    ((0.155, 0.175, 0.195, 1.0), 0.0, 0.75),
     "trunk":       ((0.130, 0.110, 0.085, 1.0), 0.0, 0.90),
-    "conifer":     ((0.070, 0.150, 0.075, 1.0), 0.0, 0.90),
-    "hedge":       ((0.110, 0.210, 0.105, 1.0), 0.0, 0.90),
+    "conifer":     ((0.038, 0.092, 0.048, 1.0), 0.0, 0.92),
+    "hedge":       ((0.072, 0.155, 0.078, 1.0), 0.0, 0.90),
 }
+
+
+# conifer proportions, shared by the baked mesh and the instanced viewer
+TREE = {
+    "height": 16.0,
+    "radius": 4.0,
+    "trunk_radius": 0.5,
+    "trunk_frac": 0.30,
+    "canopy_base": 0.20,
+    "canopy_frac": 0.86,
+}
+
+_NEIGHBOUR_PLOTS = [
+    (-268, -286, 168, 96, 13.0),
+    (-64, -318, 142, 86, 11.5),
+    (124, -352, 130, 78, 12.5),
+    (318, -186, 150, 118, 14.0),
+    (352, 52, 128, 132, 12.0),
+    (-352, -128, 120, 96, 11.0),
+]
+_NEIGHBOUR_FOOTPRINTS = [(x, y, w, d) for x, y, w, d, _ in _NEIGHBOUR_PLOTS] + [
+    (-372, 118, 52, 52),   # the western storage tank
+]
 
 
 def _b(name, mat, pos, size, rot=0.0):
@@ -235,12 +259,22 @@ def rooftop_plant(seed=7):
 # --- planting ---------------------------------------------------------------
 
 def _tree(name, x, y, scale, mat="conifer"):
-    h = 14.0 * scale
-    return [
-        _c(f"{name}_t", "trunk", (x, y, PAD_Z - 1.0), 0.45 * scale, h * 0.3, seg=6),
-        {"type": "cone", "name": f"{name}_c", "mat": mat, "pos": (x, y, PAD_Z - 1.0 + h * 0.22),
-         "radius": 3.1 * scale, "height": h * 0.85, "seg": 7},
-    ]
+    """Trunk + canopy.
+
+    Both parts carry a ``tree`` tag holding (x, y, scale) so downstream
+    consumers that can instance geometry — the three.js viewer — can drop the
+    baked meshes and use one InstancedMesh instead.
+    """
+    h = TREE["height"] * scale
+    tag = (x, y, scale)
+    trunk = _c(f"{name}_t", "trunk", (x, y, PAD_Z - 1.0),
+               TREE["trunk_radius"] * scale, h * TREE["trunk_frac"], seg=6)
+    canopy = {"type": "cone", "name": f"{name}_c", "mat": mat,
+              "pos": (x, y, PAD_Z - 1.0 + h * TREE["canopy_base"]),
+              "radius": TREE["radius"] * scale, "height": h * TREE["canopy_frac"], "seg": 7}
+    trunk["tree"] = tag
+    canopy["tree"] = tag
+    return [trunk, canopy]
 
 
 def forest(seed=11, count=2400):
@@ -260,6 +294,9 @@ def forest(seed=11, count=2400):
             continue                      # public road corridor
         if abs(x + 232) < 18:
             continue                      # branch road corridor
+        if any(abs(x - nx) < nw / 2 + 10 and abs(y - ny) < nd / 2 + 10
+               for nx, ny, nw, nd in _NEIGHBOUR_FOOTPRINTS):
+            continue                      # neighbouring plots stay clear
         p += _tree(f"ft{n}", x, y, rnd.uniform(0.85, 1.6))
         n += 1
     return p
@@ -306,6 +343,23 @@ def boundary():
     return p
 
 
+def surroundings():
+    """Neighbouring plots outside the wall.
+
+    In the reference these read as flat dark roof planes clipped by the frame,
+    plus a squat storage tank at the far west — they carry a lot of the aerial
+    composition, so they are modelled even though they are not part of the site.
+    """
+    p = []
+    for i, (x, y, w, d, h) in enumerate(_NEIGHBOUR_PLOTS):
+        p.append(_b(f"nb{i}", "neighbor", (x, y, PAD_Z - 2.0), (w, d, h)))
+        p.append(_b(f"nb{i}_lip", "dark_wall", (x, y, PAD_Z - 2.0 + h), (w + 2, d + 2, 0.8)))
+    # squat storage tank on the western neighbour plot
+    p.append(_c("nb_tank", "neighbor", (-372, 118, PAD_Z - 2.0), 24.0, 13.0, seg=32))
+    p.append(_c("nb_tank_top", "dark_wall", (-372, 118, PAD_Z + 11.0), 24.5, 0.9, seg=32))
+    return p
+
+
 # --- assembly ---------------------------------------------------------------
 
 def layout(include_forest=True):
@@ -317,6 +371,7 @@ def layout(include_forest=True):
     p += rooftop_plant()
     p += boundary()
     p += landscaping()
+    p += surroundings()
     if include_forest:
         p += forest()
     return p
@@ -330,7 +385,7 @@ CAMERA = {
     "lens_mm": 64.0,
 }
 
-SUN = {"elevation_deg": 42.0, "azimuth_deg": 128.0, "strength": 3.2}
+SUN = {"elevation_deg": 42.0, "azimuth_deg": 128.0, "strength": 4.0}
 
 
 if __name__ == "__main__":

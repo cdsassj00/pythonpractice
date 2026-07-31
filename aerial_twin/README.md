@@ -10,6 +10,8 @@
 | `dist/plant_site.glb` | 단일 바이너리 glTF (약 6 MB, 18개 머티리얼, ~116k 삼각형) |
 | `dist/plant_site.gltf` | 동일 모델의 JSON + 임베디드 버퍼 버전 |
 | `dist/preview.png` | 레퍼런스와 구도를 맞춘 확인용 프리뷰 |
+| `dist/viewer.html` | three.js 실시간 뷰어. three.js·레이아웃·레퍼런스 이미지가 전부 인라인된 단일 파일(약 1.2 MB) |
+| `dist/higgsfield_image_to_3d.glb` | Higgsfield `image_to_3d`가 같은 조감도에서 뽑은 텍스처 메시 (44k 정점) |
 
 ## 사용법
 
@@ -32,6 +34,19 @@ blender --background --python build_blender.py -- --render dist/render.png --sam
 `build_blender.py`는 GUI Blender의 Scripting 탭에서 Run 해도 동일하게 씬을 만듭니다.
 Cycles 머티리얼과 항공 카메라가 이미 잡혀 있으므로, 수작업 디테일링은 여기서 이어가면 됩니다.
 
+three.js 실시간 뷰어:
+
+```bash
+python3 export_layout_json.py --out web/layout.json
+python3 build_web.py                     # web/index.html + dist/viewer.html
+python3 -m http.server -d web 8000       # 개발용: http://localhost:8000
+```
+
+`dist/viewer.html`은 의존성이 전혀 없는 단일 파일이라 더블클릭만으로 열립니다.
+그림자·톤매핑(ACES)·PBR 머티리얼·거리 감쇠가 실시간으로 걸리고, 패널에서 태양
+고도/방위, 노출, 숲·그림자 표시, 레퍼런스 오버레이 대조를 조절할 수 있습니다.
+침엽수 2,467그루는 InstancedMesh 2개로 그려집니다.
+
 ## 구조
 
 ```
@@ -40,6 +55,12 @@ meshlib.py       ← box / cylinder / cone / gable 프리미티브 → 삼각형
 build_glb.py     ← 레이아웃을 머티리얼별 glTF primitive로 병합해 GLB 작성
 build_blender.py ← 같은 레이아웃을 Blender 오브젝트로 생성, 렌더/export
 preview.py       ← numpy z-buffer 소프트웨어 렌더러 (구도 확인용)
+glb_preview.py   ← 임의의 GLB를 같은 렌더러로 확인 (Higgsfield 결과 검수용)
+export_layout_json.py ← 레이아웃을 뷰어용 JSON으로 덤프 (나무는 인스턴스로 분리)
+build_web.py     ← three.js·씬·레이아웃을 인라인해 단일 HTML 뷰어 작성
+web/scene.js     ← 레이아웃 → three.js 씬 (머티리얼·조명·그림자·궤도 카메라)
+web/app.js       ← 계기판 UI 연결
+web/template.html ← 뷰어 마크업과 스타일
 ```
 
 좌표계는 **미터, Z-up**, 원점은 담장 안 부지 중심입니다.

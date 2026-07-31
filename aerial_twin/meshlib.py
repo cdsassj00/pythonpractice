@@ -140,9 +140,12 @@ def gable(pos, size, rot=0.0, ridge_ratio=0.0):
 
 BUILDERS = {"box": box, "cyl": cylinder, "cone": cone, "gable": gable}
 
+# keys that describe the primitive rather than its geometry
+_META_KEYS = frozenset(("type", "mat", "name", "tree"))
+
 
 def build(prim):
     """Turn a layout dict into (verts, normals, indices)."""
     kind = prim["type"]
-    args = {k: v for k, v in prim.items() if k not in ("type", "mat", "name")}
+    args = {k: v for k, v in prim.items() if k not in _META_KEYS}
     return BUILDERS[kind](**args)
