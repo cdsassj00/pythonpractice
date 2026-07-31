@@ -60,7 +60,37 @@ def inline_three(src):
 
 
 def strip_exports(src):
+    src = re.sub(r"^import\s*\{[^}]*\}\s*from\s*'\./[^']*';\s*$", "", src, flags=re.MULTILINE)
+    src = re.sub(r"^export\s*\{[^}]*\};\s*$", "", src, flags=re.MULTILINE)
     return re.sub(r"^export\s+", "", src, flags=re.MULTILINE)
+
+
+def inline_example_module(src, exports):
+    """Make a three.js examples/jsm module usable without module resolution.
+
+    Its `import {...} from 'three'` becomes a destructure of the inlined THREE
+    namespace, relative imports are dropped (their modules are inlined ahead of
+    it), and the whole thing is wrapped in an IIFE so the two example modules
+    cannot collide over a shared helper name.
+    """
+    src = re.sub(r"import\s*\{([^}]*)\}\s*from\s*'three';",
+                 lambda m: "const {" + m.group(1) + "} = THREE;", src, count=1)
+    src = re.sub(r"^import\s*\{[^}]*\}\s*from\s*'[^']*';\s*$", "", src, flags=re.MULTILINE)
+    src = re.sub(r"^export\s*\{[^}]*\};\s*$", "", src, flags=re.MULTILINE)
+    src = re.sub(r"^export\s+", "", src, flags=re.MULTILINE)
+    names = ", ".join(exports)
+    return f"const {{ {names} }} = (() => {{\n{src}\nreturn {{ {names} }};\n}})();"
+
+
+def ensure_example(name, path):
+    os.makedirs(CACHE, exist_ok=True)
+    local = os.path.join(CACHE, f"{name}-{THREE_VERSION}.js")
+    if not os.path.exists(local):
+        url = f"https://unpkg.com/three@{THREE_VERSION}/examples/jsm/{path}"
+        print(f"fetching {path}")
+        with urllib.request.urlopen(url) as resp, open(local, "wb") as fh:
+            fh.write(resp.read())
+    return read(local)
 
 
 def data_uri(path, mime):
@@ -107,6 +137,7 @@ def build_artifact(out):
         read(WEB, "template.html"),
         '<script type="module">',
         inline_three(ensure_three()),
+        strip_exports(read(WEB, "orbit.js")),
         strip_exports(read(WEB, "scene.js")),
         "const scene={buildScene,attachOrbit,createViewer,toWorld};",
         strip_exports(read(WEB, "app.js")),
@@ -121,11 +152,54 @@ def build_artifact(out):
     print(f"wrote {out} ({os.path.getsize(out) / 1e6:.2f} MB)")
 
 
+def build_glb_viewer(model_path, out):
+    """Single-file viewer for a textured GLB — the mesh is inlined as base64."""
+    with open(model_path, "rb") as fh:
+        model_b64 = base64.b64encode(fh.read()).decode("ascii")
+    ref_path = os.path.join(HERE, "ref", "reference.jpg")
+    ref = data_uri(ref_path, "image/jpeg") if os.path.exists(ref_path) else ""
+
+    decode = (
+        "const b64=MODEL_B64;"
+        "const bin=atob(b64);"
+        "const buf=new Uint8Array(bin.length);"
+        "for(let i=0;i<bin.length;i++)buf[i]=bin.charCodeAt(i);"
+    )
+
+    parts = [
+        read(WEB, "glb_template.html"),
+        '<script type="module">',
+        inline_three(ensure_three()),
+        inline_example_module(
+            ensure_example("BufferGeometryUtils", "utils/BufferGeometryUtils.js"),
+            ["toTrianglesDrawMode"]),
+        inline_example_module(
+            ensure_example("GLTFLoader", "loaders/GLTFLoader.js"), ["GLTFLoader"]),
+        strip_exports(read(WEB, "orbit.js")),
+        strip_exports(read(WEB, "glb_scene.js")),
+        strip_exports(read(WEB, "glb_app.js")),
+        "const MODEL_B64=" + json.dumps(model_b64) + ";",
+        decode,
+        f"const referenceSrc={json.dumps(ref)};",
+        "window.__viewer = await startGlb(THREE, GLTFLoader, buf.buffer, referenceSrc);",
+        "</script>",
+    ]
+    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
+    with open(out, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(parts))
+    print(f"wrote {out} ({os.path.getsize(out) / 1e6:.2f} MB)")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=os.path.join(HERE, "dist", "viewer.html"))
+    ap.add_argument("--glb-model", default=os.path.join(HERE, "dist",
+                                                       "higgsfield_image_to_3d_web.glb"))
+    ap.add_argument("--glb-out", default=os.path.join(HERE, "dist", "mesh_viewer.html"))
     ap.add_argument("--dev-only", action="store_true")
     a = ap.parse_args()
     build_dev()
     if not a.dev_only:
         build_artifact(a.out)
+        if os.path.exists(a.glb_model):
+            build_glb_viewer(a.glb_model, a.glb_out)
